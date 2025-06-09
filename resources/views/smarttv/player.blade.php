@@ -23,6 +23,14 @@
                     <h4 class="playlist-title">{{ $playlist->name }}</h4>
                     <p class="mb-1" id="currentVideoTitle">Loading...</p>
                     <small class="video-counter" id="videoCounter">0 / {{ $playlist->videos->count() }}</small>
+                    <div class="mt-2">
+                        <small class="badge bg-success" id="autoRefreshStatus">
+                            <i class="bi bi-arrow-clockwise me-1"></i>Auto-refresh: ON
+                        </small>
+                        <small class="badge bg-primary ms-2" id="autoFullscreenStatus">
+                            <i class="bi bi-arrows-fullscreen me-1"></i>Auto-fullscreen: ON
+                        </small>
+                    </div>
                 </div>
             </div>
         </div>
@@ -64,6 +72,9 @@
                     <button class="control-btn" id="backBtn" title="Kembali ke Menu" onclick="goBack()">
                         <i class="bi bi-house-fill"></i>
                     </button>
+                    <button class="control-btn" id="refreshBtn" title="Refresh Playlist" onclick="manualRefresh()">
+                        <i class="bi bi-arrow-clockwise"></i>
+                    </button>
                 </div>
             </div>
         </div>
@@ -87,6 +98,63 @@
 @endsection
 
 @push('scripts')
+<style>
+/* Refresh button animation */
+@keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+.spinning {
+    animation: spin 1s linear infinite;
+}
+
+/* Enhanced control button styling */
+.control-btn {
+    background: rgba(0, 0, 0, 0.7);
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    color: white;
+    padding: 12px;
+    margin: 0 5px;
+    border-radius: 50%;
+    transition: all 0.3s ease;
+    font-size: 1.2rem;
+    width: 50px;
+    height: 50px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.control-btn:hover {
+    background: rgba(0, 123, 255, 0.8);
+    border-color: #007bff;
+    transform: scale(1.1);
+}
+
+.control-btn:active {
+    transform: scale(0.95);
+}
+
+.control-btn.active {
+    background: rgba(0, 123, 255, 0.9);
+    border-color: #007bff;
+}
+
+/* Status badges styling */
+.badge {
+    font-size: 0.75rem;
+    padding: 0.5rem 0.75rem;
+    border-radius: 0.375rem;
+}
+
+/* Notification styling improvements */
+.alert {
+    border: none;
+    border-radius: 0.5rem;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+</style>
 <script>
 // Global variables
 let currentPlaylist = @json($playlist);
@@ -95,11 +163,30 @@ let videoPlayer = null;
 let isAutoPlay = {{ $playlist->auto_play ? 'true' : 'false' }};
 let isLoop = {{ $playlist->loop_playlist ? 'true' : 'false' }};
 
+// Auto-refresh variables
+let autoRefreshInterval = null;
+let lastPlaylistUpdate = null;
+let refreshIntervalMs = 30000; // 30 seconds
+let isRefreshing = false;
+
+// Auto fullscreen variables
+let autoFullscreenEnabled = true;
+let isAutoFullscreenTriggered = false;
+
 document.addEventListener('DOMContentLoaded', function() {
     videoPlayer = document.getElementById('mainVideoPlayer');
+
+    // Initialize auto fullscreen preference from localStorage
+    const savedAutoFullscreen = localStorage.getItem('autoFullscreenEnabled');
+    if (savedAutoFullscreen !== null) {
+        autoFullscreenEnabled = savedAutoFullscreen === 'true';
+    }
+    updateAutoFullscreenStatus();
+
     initializePlayer();
     setupEventListeners();
     loadVideo(0);
+    startAutoRefresh();
 });
 
 function initializePlayer() {
@@ -150,6 +237,11 @@ function loadVideo(index) {
     // Auto play if enabled
     if (isAutoPlay) {
         videoPlayer.play().catch(e => console.log('Auto-play prevented:', e));
+    }
+
+    // Trigger auto fullscreen for the first video
+    if (autoFullscreenEnabled && !isAutoFullscreenTriggered && index === 0) {
+        triggerAutoFullscreen();
     }
 }
 
@@ -269,6 +361,16 @@ function handleKeyboard(e) {
             e.preventDefault();
             togglePlaylist();
             break;
+        case 'r':
+        case 'R':
+            e.preventDefault();
+            manualRefresh();
+            break;
+        case 'a':
+        case 'A':
+            e.preventDefault();
+            toggleAutoFullscreen();
+            break;
     }
 }
 
@@ -353,6 +455,241 @@ function formatTime(seconds) {
     }
 
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+}
+
+// Auto-refresh functions
+function startAutoRefresh() {
+    if (autoRefreshInterval) {
+        clearInterval(autoRefreshInterval);
+    }
+    
+    // Store initial playlist state
+    lastPlaylistUpdate = Date.now();
+    
+    autoRefreshInterval = setInterval(() => {
+        if (!isRefreshing) {
+            checkForPlaylistUpdates();
+        }
+    }, refreshIntervalMs);
+    
+    updateAutoRefreshStatus(true);
+    console.log('Auto-refresh started with interval:', refreshIntervalMs + 'ms');
+}
+
+function stopAutoRefresh() {
+    if (autoRefreshInterval) {
+        clearInterval(autoRefreshInterval);
+        autoRefreshInterval = null;
+    }
+    updateAutoRefreshStatus(false);
+    console.log('Auto-refresh stopped');
+}
+
+function checkForPlaylistUpdates() {
+    if (isRefreshing) return;
+    
+    isRefreshing = true;
+    
+    fetch(`/tv/api/playlist/${currentPlaylist.id}`, {
+        method: 'GET',
+        headers: {
+            'Accept': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest'
+        }
+    })
+    .then(response => {
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        return response.json();
+    })
+    .then(data => {
+        console.log('Received playlist data:', data);
+        
+        // Validate the response structure
+        if (!data || !Array.isArray(data.videos)) {
+            throw new Error('Invalid playlist data received');
+        }
+        
+        if (hasPlaylistChanged(data)) {
+            updatePlaylistData(data);
+            showRefreshNotification('Playlist updated!');
+        } else {
+            console.log('No changes detected in playlist');
+        }
+        lastPlaylistUpdate = Date.now();
+    })
+    .catch(error => {
+        console.error('Error checking for playlist updates:', error);
+        showRefreshNotification('Failed to check for updates', 'error');
+    })
+    .finally(() => {
+        isRefreshing = false;
+    });
+}
+
+function hasPlaylistChanged(newPlaylist) {
+    // Validate input
+    if (!newPlaylist || !Array.isArray(newPlaylist.videos)) {
+        console.error('Invalid playlist data for comparison');
+        return false;
+    }
+    
+    if (!currentPlaylist || !Array.isArray(currentPlaylist.videos)) {
+        console.error('Current playlist data is invalid');
+        return false;
+    }
+    
+    // Check if video count changed
+    if (newPlaylist.videos.length !== currentPlaylist.videos.length) {
+        console.log('Video count changed:', currentPlaylist.videos.length, '->', newPlaylist.videos.length);
+        return true;
+    }
+    
+    // Check if video order or content changed
+    for (let i = 0; i < newPlaylist.videos.length; i++) {
+        const currentVideo = currentPlaylist.videos[i];
+        const newVideo = newPlaylist.videos[i];
+        
+        if (!currentVideo || !newVideo) {
+            console.log('Missing video data at index', i);
+            return true;
+        }
+        
+        if (currentVideo.id !== newVideo.id || 
+            currentVideo.title !== newVideo.title ||
+            currentVideo.video_url !== newVideo.video_url) {
+            console.log('Video content changed at index', i);
+            return true;
+        }
+    }
+    
+    // Check if playlist settings changed
+    if (newPlaylist.auto_play !== currentPlaylist.auto_play ||
+        newPlaylist.loop_playlist !== currentPlaylist.loop_playlist) {
+        console.log('Playlist settings changed');
+        return true;
+    }
+    
+    return false;
+}
+
+function updatePlaylistData(newPlaylist) {
+    const currentVideoId = currentPlaylist.videos[currentVideoIndex]?.id;
+    
+    // Update playlist data
+    currentPlaylist = newPlaylist;
+    isAutoPlay = newPlaylist.auto_play;
+    isLoop = newPlaylist.loop_playlist;
+    
+    // Try to maintain current video position
+    let newVideoIndex = currentVideoIndex; // Keep current index as fallback
+    if (currentVideoId) {
+        const videoIndex = newPlaylist.videos.findIndex(video => video.id === currentVideoId);
+        if (videoIndex !== -1) {
+            newVideoIndex = videoIndex;
+            currentVideoIndex = newVideoIndex; // Update the current index
+        }
+    }
+    
+    // Update UI
+    document.getElementById('videoCounter').textContent = `${newVideoIndex + 1} / ${newPlaylist.videos.length}`;
+    populatePlaylistSidebar();
+    updatePlaylistHighlight();
+    
+    console.log('Playlist data updated. Videos:', newPlaylist.videos.length);
+}
+
+function manualRefresh() {
+    const refreshBtn = document.getElementById('refreshBtn');
+    const icon = refreshBtn.querySelector('i');
+    
+    // Add spinning animation
+    icon.classList.add('spinning');
+    refreshBtn.disabled = true;
+    
+    checkForPlaylistUpdates();
+    
+    // Remove animation after 2 seconds
+    setTimeout(() => {
+        icon.classList.remove('spinning');
+        refreshBtn.disabled = false;
+    }, 2000);
+}
+
+function updateAutoRefreshStatus(isActive = null) {
+    const statusElement = document.getElementById('autoRefreshStatus');
+    const isCurrentlyActive = autoRefreshInterval !== null;
+    const status = isActive !== null ? isActive : isCurrentlyActive;
+    
+    if (status) {
+        statusElement.innerHTML = '<i class="bi bi-arrow-clockwise me-1"></i>Auto-refresh: ON';
+        statusElement.className = 'badge bg-success';
+    } else {
+        statusElement.innerHTML = '<i class="bi bi-arrow-clockwise me-1"></i>Auto-refresh: OFF';
+        statusElement.className = 'badge bg-secondary';
+    }
+}
+
+function showRefreshNotification(message, type = 'success') {
+    // Create notification element
+    const notification = document.createElement('div');
+    notification.className = `alert alert-${type === 'error' ? 'danger' : 'success'} position-fixed`;
+    notification.style.cssText = `
+        top: 20px;
+        right: 20px;
+        z-index: 9999;
+        min-width: 300px;
+        opacity: 0;
+        transition: opacity 0.3s ease;
+    `;
+    notification.innerHTML = `
+        <i class="bi bi-${type === 'error' ? 'exclamation-triangle' : 'check-circle'} me-2"></i>
+        ${message}
+    `;
+    
+    document.body.appendChild(notification);
+    
+    // Fade in
+    setTimeout(() => notification.style.opacity = '1', 100);
+    
+    // Remove after 3 seconds
+    setTimeout(() => {
+        notification.style.opacity = '0';
+        setTimeout(() => notification.remove(), 300);
+    }, 3000);
+}
+
+// Auto fullscreen functions
+function triggerAutoFullscreen() {
+    if (autoFullscreenEnabled && !document.fullscreenElement) {
+        videoPlayer.requestFullscreen().catch(err => {
+            console.log('Auto fullscreen failed:', err);
+        });
+        isAutoFullscreenTriggered = true;
+    }
+}
+
+function toggleAutoFullscreen() {
+    autoFullscreenEnabled = !autoFullscreenEnabled;
+    localStorage.setItem('autoFullscreenEnabled', autoFullscreenEnabled.toString());
+    updateAutoFullscreenStatus();
+    showRefreshNotification(
+        `Auto-fullscreen ${autoFullscreenEnabled ? 'enabled' : 'disabled'}`,
+        'success'
+    );
+}
+
+function updateAutoFullscreenStatus() {
+    const statusElement = document.getElementById('autoFullscreenStatus');
+    
+    if (autoFullscreenEnabled) {
+        statusElement.innerHTML = '<i class="bi bi-arrows-fullscreen me-1"></i>Auto-fullscreen: ON';
+        statusElement.className = 'badge bg-primary';
+    } else {
+        statusElement.innerHTML = '<i class="bi bi-arrows-fullscreen me-1"></i>Auto-fullscreen: OFF';
+        statusElement.className = 'badge bg-secondary';
+    }
 }
 
 // Auto-hide cursor in fullscreen mode
