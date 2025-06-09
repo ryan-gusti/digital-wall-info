@@ -32,6 +32,27 @@
                         </small>
                     </div>
                 </div>
+
+                <!-- Start Button Overlay for User Interaction -->
+                <div class="position-absolute top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center bg-dark bg-opacity-75" 
+                     id="startOverlay" style="z-index: 1000;">
+                    <div class="text-center text-white">
+                        <div class="mb-4">
+                            <i class="bi bi-play-circle display-1 mb-3" style="font-size: 4rem;"></i>
+                            <h3 class="mb-2">{{ $playlist->name }}</h3>
+                            <p class="text-muted">{{ $playlist->videos->count() }} video{{ $playlist->videos->count() != 1 ? 's' : '' }} ready to play</p>
+                        </div>
+                        <button class="btn btn-primary btn-lg px-5 py-3" id="startButton" onclick="startPlayback()">
+                            <i class="bi bi-play-fill me-2"></i>START PLAYLIST
+                        </button>
+                        <div class="mt-3">
+                            <small class="text-muted">
+                                <i class="bi bi-info-circle me-1"></i>
+                                Click to enable autoplay and fullscreen
+                            </small>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -154,6 +175,39 @@
     border-radius: 0.5rem;
     box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
 }
+
+/* Start Overlay Styling */
+#startOverlay {
+    backdrop-filter: blur(10px);
+    transition: opacity 0.5s ease;
+}
+
+#startButton {
+    background: linear-gradient(45deg, #007bff, #0056b3);
+    border: none;
+    border-radius: 50px;
+    font-weight: bold;
+    font-size: 1.1rem;
+    box-shadow: 0 4px 15px rgba(0, 123, 255, 0.4);
+    transition: all 0.3s ease;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+#startButton:hover {
+    background: linear-gradient(45deg, #0056b3, #004085);
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(0, 123, 255, 0.6);
+}
+
+#startButton:active {
+    transform: translateY(0);
+    box-shadow: 0 2px 10px rgba(0, 123, 255, 0.4);
+}
+
+#startButton i {
+    font-size: 1.2rem;
+}
 </style>
 <script>
 // Global variables
@@ -172,6 +226,7 @@ let isRefreshing = false;
 // Auto fullscreen variables
 let autoFullscreenEnabled = true;
 let isAutoFullscreenTriggered = false;
+let userHasInteracted = false;
 
 document.addEventListener('DOMContentLoaded', function() {
     videoPlayer = document.getElementById('mainVideoPlayer');
@@ -185,7 +240,9 @@ document.addEventListener('DOMContentLoaded', function() {
 
     initializePlayer();
     setupEventListeners();
-    loadVideo(0);
+    
+    // Don't auto-load video until user interaction
+    // loadVideo(0);
     startAutoRefresh();
 });
 
@@ -200,14 +257,51 @@ function initializePlayer() {
 
     // Populate playlist sidebar
     populatePlaylistSidebar();
+    
+    // Load first video data without playing
+    if (currentPlaylist.videos.length > 0) {
+        const firstVideo = currentPlaylist.videos[0];
+        document.getElementById('currentVideoTitle').textContent = firstVideo.title;
+        document.getElementById('videoTitle').textContent = firstVideo.title;
+        document.getElementById('videoCounter').textContent = `1 / ${currentPlaylist.videos.length}`;
+    }
 }
 
 function setupEventListeners() {
     // Control buttons
-    document.getElementById('playPauseBtn').addEventListener('click', togglePlayPause);
-    document.getElementById('prevBtn').addEventListener('click', playPrevious);
-    document.getElementById('nextBtn').addEventListener('click', playNext);
-    document.getElementById('fullscreenBtn').addEventListener('click', toggleFullscreen);
+    document.getElementById('playPauseBtn').addEventListener('click', () => {
+        if (!userHasInteracted) {
+            startPlayback();
+        } else {
+            togglePlayPause();
+        }
+    });
+    
+    document.getElementById('prevBtn').addEventListener('click', () => {
+        if (!userHasInteracted) {
+            startPlayback();
+            setTimeout(() => playPrevious(), 500);
+        } else {
+            playPrevious();
+        }
+    });
+    
+    document.getElementById('nextBtn').addEventListener('click', () => {
+        if (!userHasInteracted) {
+            startPlayback();
+            setTimeout(() => playNext(), 500);
+        } else {
+            playNext();
+        }
+    });
+    
+    document.getElementById('fullscreenBtn').addEventListener('click', () => {
+        if (!userHasInteracted) {
+            startPlayback();
+        } else {
+            toggleFullscreen();
+        }
+    });
 
     // Keyboard controls for TV remote
     document.addEventListener('keydown', handleKeyboard);
@@ -234,14 +328,46 @@ function loadVideo(index) {
     // Update playlist sidebar
     updatePlaylistHighlight();
 
-    // Auto play if enabled
-    if (isAutoPlay) {
+    // Only auto play if user has interacted and autoplay is enabled
+    if (isAutoPlay && userHasInteracted) {
         videoPlayer.play().catch(e => console.log('Auto-play prevented:', e));
     }
 
-    // Trigger auto fullscreen for the first video
-    if (autoFullscreenEnabled && !isAutoFullscreenTriggered && index === 0) {
+    // Trigger auto fullscreen for the first video only if user has interacted
+    if (autoFullscreenEnabled && !isAutoFullscreenTriggered && index === 0 && userHasInteracted) {
         triggerAutoFullscreen();
+    }
+}
+
+// Function to handle START button click
+function startPlayback() {
+    userHasInteracted = true;
+    
+    // Hide the start overlay
+    const startOverlay = document.getElementById('startOverlay');
+    startOverlay.style.opacity = '0';
+    
+    setTimeout(() => {
+        startOverlay.style.display = 'none';
+    }, 500);
+
+    // Load and start the first video
+    loadVideo(0);
+    
+    // Attempt to enter fullscreen if auto-fullscreen is enabled
+    if (autoFullscreenEnabled) {
+        triggerAutoFullscreen();
+    }
+    
+    // Start playing the video
+    if (isAutoPlay) {
+        videoPlayer.play().then(() => {
+            console.log('Playback started successfully');
+            showRefreshNotification('Playlist started!', 'success');
+        }).catch(error => {
+            console.error('Playback failed:', error);
+            showRefreshNotification('Failed to start playback', 'error');
+        });
     }
 }
 
@@ -326,6 +452,20 @@ function seekVideo(e) {
 }
 
 function handleKeyboard(e) {
+    // Check if start overlay is visible
+    const startOverlay = document.getElementById('startOverlay');
+    if (startOverlay.style.display !== 'none' && window.getComputedStyle(startOverlay).opacity !== '0') {
+        // If start overlay is visible, any key should start playback
+        if (e.key === ' ' || e.key === 'Enter') {
+            e.preventDefault();
+            startPlayback();
+            return;
+        }
+    }
+
+    // Normal keyboard controls (only work after user interaction)
+    if (!userHasInteracted) return;
+
     switch(e.key) {
         case ' ':
         case 'Enter':
@@ -354,7 +494,11 @@ function handleKeyboard(e) {
             toggleFullscreen();
             break;
         case 'Escape':
-            goBack();
+            if (document.fullscreenElement) {
+                document.exitFullscreen();
+            } else {
+                goBack();
+            }
             break;
         case 'p':
         case 'P':
@@ -394,7 +538,16 @@ function populatePlaylistSidebar() {
             </div>
         `;
 
-        item.addEventListener('click', () => loadVideo(index));
+        item.addEventListener('click', () => {
+            // If user hasn't interacted, start playback first
+            if (!userHasInteracted) {
+                startPlayback();
+                setTimeout(() => loadVideo(index), 500);
+            } else {
+                loadVideo(index);
+            }
+        });
+        
         item.addEventListener('mouseenter', () => item.style.backgroundColor = 'rgba(255,255,255,0.1)');
         item.addEventListener('mouseleave', () => item.style.backgroundColor = 'transparent');
 
@@ -662,11 +815,31 @@ function showRefreshNotification(message, type = 'success') {
 
 // Auto fullscreen functions
 function triggerAutoFullscreen() {
-    if (autoFullscreenEnabled && !document.fullscreenElement) {
-        videoPlayer.requestFullscreen().catch(err => {
-            console.log('Auto fullscreen failed:', err);
-        });
-        isAutoFullscreenTriggered = true;
+    if (autoFullscreenEnabled && !document.fullscreenElement && userHasInteracted) {
+        // Try to request fullscreen with better error handling
+        if (videoPlayer.requestFullscreen) {
+            videoPlayer.requestFullscreen().then(() => {
+                console.log('Auto fullscreen activated successfully');
+                isAutoFullscreenTriggered = true;
+                showRefreshNotification('Entered fullscreen mode', 'success');
+            }).catch(err => {
+                console.log('Auto fullscreen failed:', err.message);
+                // Don't show error notification for permission denied, as it's expected behavior
+                if (err.name !== 'NotAllowedError') {
+                    showRefreshNotification('Fullscreen not available', 'error');
+                }
+            });
+        } else if (videoPlayer.webkitRequestFullscreen) {
+            // Safari fallback
+            videoPlayer.webkitRequestFullscreen();
+            isAutoFullscreenTriggered = true;
+        } else if (videoPlayer.msRequestFullscreen) {
+            // IE/Edge fallback
+            videoPlayer.msRequestFullscreen();
+            isAutoFullscreenTriggered = true;
+        } else {
+            console.log('Fullscreen API not supported');
+        }
     }
 }
 
