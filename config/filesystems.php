@@ -44,6 +44,14 @@ return [
             'throw' => false,
         ],
 
+        'z_drive' => [
+            'driver' => 'local',
+            'root' => 'Z:/',
+            'url' => env('APP_URL').'/videos',
+            'visibility' => 'public',
+            'throw' => false,
+        ],
+
         's3' => [
             'driver' => 's3',
             'key' => env('AWS_ACCESS_KEY_ID'),

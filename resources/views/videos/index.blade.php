@@ -23,6 +23,7 @@
                         <tr>
                             <th style="width: 80px;">Thumbnail</th>
                             <th>Judul</th>
+                            <th style="width: 120px;">Sumber</th>
                             <th style="width: 100px;">Durasi</th>
                             <th style="width: 100px;">Status</th>
                             <th style="width: 100px;">Urutan</th>
@@ -49,6 +50,19 @@
                                     <div class="fw-bold">{{ $video->title }}</div>
                                     @if($video->description)
                                         <small class="text-muted">{{ Str::limit($video->description, 50) }}</small>
+                                    @endif
+                                </td>
+                                <td>
+                                    @if($video->isStoredLocally())
+                                        <span class="badge bg-success">
+                                            <i class="bi bi-hdd me-1"></i>Z: Drive
+                                        </span>
+                                        <div><small class="text-muted">{{ basename($video->file_path) }}</small></div>
+                                    @else
+                                        <span class="badge bg-primary">
+                                            <i class="bi bi-link-45deg me-1"></i>URL
+                                        </span>
+                                        <div><small class="text-muted">External</small></div>
                                     @endif
                                 </td>
                                 <td>

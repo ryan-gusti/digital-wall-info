@@ -13,6 +13,8 @@ class Video extends Model
         'title',
         'description',
         'video_url',
+        'file_path',
+        'storage_disk',
         'thumbnail_url',
         'duration',
         'video_type',
@@ -38,6 +40,33 @@ class Video extends Model
     public function scopeActive($query)
     {
         return $query->where('is_active', true);
+    }
+
+    // Check if video is stored locally on Z: drive
+    public function isStoredLocally()
+    {
+        return !empty($this->file_path) && !empty($this->storage_disk);
+    }
+
+    // Get the appropriate video URL (local file URL or external URL)
+    public function videoUrl()
+    {
+        if ($this->isStoredLocally()) {
+            return route('videos.serve-file', ['filename' => $this->file_path]);
+        }
+
+        return $this->video_url;
+    }
+
+    // Accessor untuk video URL attribute
+    public function getVideoUrlAttribute($value)
+    {
+        // If accessing video_url and it's stored locally, return the serve route
+        if ($this->isStoredLocally()) {
+            return route('videos.serve-file', ['filename' => $this->file_path]);
+        }
+
+        return $value;
     }
 
     // Accessor untuk format durasi

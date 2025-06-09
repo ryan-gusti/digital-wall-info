@@ -24,6 +24,11 @@ Route::get('/', function () {
 // Resource routes untuk Video Management
 Route::resource('videos', VideoController::class);
 
+// Route for serving video files from Z: drive
+Route::get('/videos/file/{filename}', [VideoController::class, 'serveFile'])
+    ->where('filename', '.*')
+    ->name('videos.serve-file');
+
 // Resource routes untuk Playlist Management
 Route::resource('playlists', PlaylistController::class);
 

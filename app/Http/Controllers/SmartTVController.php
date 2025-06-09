@@ -30,7 +30,15 @@ class SmartTVController extends Controller
             abort(404, 'Playlist tidak aktif');
         }
 
-        $playlist->load('videos');
+        $playlist->load(['videos' => function ($query) {
+            $query->orderBy('pivot_sort_order');
+        }]);
+
+        // Transform the playlist data to ensure correct video URLs
+        $playlist->videos->transform(function ($video) {
+            $video->video_url = $video->videoUrl(); // Use the method that handles both local and external URLs
+            return $video;
+        });
 
         return view('smarttv.player', compact('playlist'));
     }
@@ -57,7 +65,7 @@ class SmartTVController extends Controller
                     'id' => $video->id,
                     'title' => $video->title,
                     'description' => $video->description,
-                    'video_url' => $video->video_url,
+                    'video_url' => $video->videoUrl(), // Use the method that handles both local and external URLs
                     'thumbnail_url' => $video->thumbnail_url,
                     'duration' => $video->duration,
                     'formatted_duration' => $video->formatted_duration,

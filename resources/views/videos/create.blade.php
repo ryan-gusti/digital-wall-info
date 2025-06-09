@@ -13,7 +13,7 @@
                 </h4>
             </div>
             <div class="card-body">
-                <form action="{{ route('videos.store') }}" method="POST">
+                <form action="{{ route('videos.store') }}" method="POST" enctype="multipart/form-data">
                     @csrf
 
                     <div class="mb-3">
@@ -40,15 +40,51 @@
                         @enderror
                     </div>
 
+                    <!-- Video Source Selection -->
                     <div class="mb-3">
+                        <label class="form-label">Sumber Video</label>
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="video_source" id="source_file" value="file"
+                                   {{ old('video_source', 'file') == 'file' ? 'checked' : '' }}>
+                            <label class="form-check-label" for="source_file">
+                                <i class="bi bi-upload me-1"></i> Upload File Video ke Z:
+                            </label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="video_source" id="source_url" value="url"
+                                   {{ old('video_source') == 'url' ? 'checked' : '' }}>
+                            <label class="form-check-label" for="source_url">
+                                <i class="bi bi-link-45deg me-1"></i> URL Video Eksternal
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- File Upload Section -->
+                    <div class="mb-3" id="file_upload_section">
+                        <label for="video_file" class="form-label">File Video *</label>
+                        <input type="file"
+                               class="form-control @error('video_file') is-invalid @enderror"
+                               id="video_file"
+                               name="video_file"
+                               accept="video/*,.mp4,.avi,.mov,.wmv,.webm">
+                        @error('video_file')
+                            <div class="invalid-feedback">{{ $message }}</div>
+                        @enderror
+                        <div class="form-text">
+                            Upload file video (MP4, AVI, MOV, WMV, WebM). Maksimal 500MB.
+                            File akan disimpan ke disk Z:.
+                        </div>
+                    </div>
+
+                    <!-- URL Section -->
+                    <div class="mb-3 d-none" id="url_section">
                         <label for="video_url" class="form-label">URL Video *</label>
                         <input type="url"
                                class="form-control @error('video_url') is-invalid @enderror"
                                id="video_url"
                                name="video_url"
                                value="{{ old('video_url') }}"
-                               placeholder="https://example.com/video.mp4"
-                               required>
+                               placeholder="https://example.com/video.mp4">
                         @error('video_url')
                             <div class="invalid-feedback">{{ $message }}</div>
                         @enderror
@@ -148,25 +184,93 @@
 
 @push('scripts')
 <script>
-// Auto-detect video duration from URL (if supported)
-document.getElementById('video_url').addEventListener('blur', function() {
-    const url = this.value;
-    if (url && url.match(/\.(mp4|avi|mov|wmv|webm)$/i)) {
-        // Create temporary video element to get duration
-        const video = document.createElement('video');
-        video.preload = 'metadata';
-        video.src = url;
+document.addEventListener('DOMContentLoaded', function() {
+    const fileRadio = document.getElementById('source_file');
+    const urlRadio = document.getElementById('source_url');
+    const fileSection = document.getElementById('file_upload_section');
+    const urlSection = document.getElementById('url_section');
+    const videoFileInput = document.getElementById('video_file');
+    const videoUrlInput = document.getElementById('video_url');
 
-        video.addEventListener('loadedmetadata', function() {
-            if (this.duration && this.duration !== Infinity) {
-                document.getElementById('duration').value = Math.round(this.duration);
-            }
-        });
-
-        video.addEventListener('error', function() {
-            console.log('Could not load video metadata');
-        });
+    // Toggle sections based on radio selection
+    function toggleSections() {
+        if (fileRadio.checked) {
+            fileSection.classList.remove('d-none');
+            urlSection.classList.add('d-none');
+            videoFileInput.required = true;
+            videoUrlInput.required = false;
+            videoUrlInput.value = '';
+        } else {
+            fileSection.classList.add('d-none');
+            urlSection.classList.remove('d-none');
+            videoFileInput.required = false;
+            videoUrlInput.required = true;
+        }
     }
+
+    // Initial toggle
+    toggleSections();
+
+    // Add event listeners
+    fileRadio.addEventListener('change', toggleSections);
+    urlRadio.addEventListener('change', toggleSections);
+
+    // Auto-detect video duration from uploaded file
+    videoFileInput.addEventListener('change', function() {
+        const file = this.files[0];
+        if (file) {
+            const video = document.createElement('video');
+            video.preload = 'metadata';
+
+            video.addEventListener('loadedmetadata', function() {
+                if (this.duration && this.duration !== Infinity) {
+                    document.getElementById('duration').value = Math.round(this.duration);
+                }
+                // Auto-detect video type from file extension
+                const fileName = file.name.toLowerCase();
+                if (fileName.endsWith('.mp4')) {
+                    document.getElementById('video_type').value = 'mp4';
+                } else if (fileName.endsWith('.avi')) {
+                    document.getElementById('video_type').value = 'avi';
+                } else if (fileName.endsWith('.mov')) {
+                    document.getElementById('video_type').value = 'mov';
+                } else if (fileName.endsWith('.wmv')) {
+                    document.getElementById('video_type').value = 'wmv';
+                } else if (fileName.endsWith('.webm')) {
+                    document.getElementById('video_type').value = 'webm';
+                }
+            });
+
+            video.addEventListener('error', function() {
+                console.log('Could not load video metadata');
+            });
+
+            // Create object URL for the file
+            const url = URL.createObjectURL(file);
+            video.src = url;
+        }
+    });
+
+    // Auto-detect video duration from URL (if supported)
+    videoUrlInput.addEventListener('blur', function() {
+        const url = this.value;
+        if (url && url.match(/\.(mp4|avi|mov|wmv|webm)$/i)) {
+            // Create temporary video element to get duration
+            const video = document.createElement('video');
+            video.preload = 'metadata';
+            video.src = url;
+
+            video.addEventListener('loadedmetadata', function() {
+                if (this.duration && this.duration !== Infinity) {
+                    document.getElementById('duration').value = Math.round(this.duration);
+                }
+            });
+
+            video.addEventListener('error', function() {
+                console.log('Could not load video metadata');
+            });
+        }
+    });
 });
 </script>
 @endpush

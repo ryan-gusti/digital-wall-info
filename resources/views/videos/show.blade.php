@@ -26,7 +26,7 @@
                         </div>
                         <div class="card-body p-0">
                             <video controls style="width: 100%; height: auto;" id="videoPlayer">
-                                <source src="{{ $video->video_url }}" type="video/{{ $video->video_type }}">
+                                <source src="{{ $video->videoUrl() }}" type="video/{{ $video->video_type }}">
                                 Your browser does not support the video tag.
                             </video>
                         </div>
