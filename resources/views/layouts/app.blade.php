@@ -65,6 +65,13 @@
                             Videos
                         </a>
                     </li>
+                    <li class="nav-item">
+                        <a class="nav-link {{ request()->routeIs('tvs.*') ? 'active' : '' }}"
+                           href="{{ route('tvs.index') }}">
+                            <i class="bi bi-display me-1"></i>
+                            TV Management
+                        </a>
+                    </li>
                 </ul>
 
                 <ul class="navbar-nav">

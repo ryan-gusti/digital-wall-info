@@ -4,21 +4,79 @@ namespace App\Http\Controllers;
 
 use App\Models\Playlist;
 use App\Models\Video;
+use App\Models\Tv;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Http;
 
 class SmartTVController extends Controller
 {
     /**
-     * Display TV interface with available playlists
+     * Display TV interface with available playlists or auto-redirect based on IP
      */
-    public function index()
+    public function index(Request $request)
     {
+        // Tampilkan halaman dengan JavaScript untuk pengecekan IP eksternal
         $playlists = Playlist::active()
             ->with('videos')
             ->orderBy('sort_order')
             ->get();
 
         return view('smarttv.index', compact('playlists'));
+    }
+
+    /**
+     * Check TV registration based on IP address from external API
+     */
+    public function checkTvByIp(Request $request)
+    {
+        $request->validate([
+            'ip_address' => 'required|ip'
+        ]);
+
+        $clientIp = $request->input('ip_address');
+
+        // Cek apakah TV dengan IP ini sudah terdaftar
+        $tv = Tv::active()->where('ip_address', $clientIp)->with('playlist')->first();
+
+        // Jika TV ditemukan dan memiliki playlist, return redirect URL
+        if ($tv && $tv->playlist && $tv->playlist->is_active) {
+            return response()->json([
+                'status' => 'redirect',
+                'redirect_url' => route('tv.play', $tv->playlist),
+                'tv' => [
+                    'name' => $tv->name,
+                    'location' => $tv->location,
+                    'playlist_name' => $tv->playlist->name
+                ]
+            ]);
+        }
+
+        // Jika TV ditemukan tapi tidak ada playlist yang diatur
+        if ($tv && !$tv->playlist) {
+            return response()->json([
+                'status' => 'no_playlist',
+                'message' => 'TV terdaftar tetapi belum memiliki playlist yang ditentukan',
+                'tv' => [
+                    'name' => $tv->name,
+                    'location' => $tv->location
+                ]
+            ]);
+        }
+
+        // Jika TV tidak terdaftar
+        if (!$tv) {
+            return response()->json([
+                'status' => 'not_registered',
+                'message' => 'TV belum terdaftar dalam sistem',
+                'ip_address' => $clientIp
+            ]);
+        }
+
+        // Default response
+        return response()->json([
+            'status' => 'manual_selection',
+            'message' => 'Silakan pilih playlist secara manual'
+        ]);
     }
 
     /**

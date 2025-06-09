@@ -34,6 +34,14 @@ class Playlist extends Model
                     ->orderBy('playlist_videos.sort_order');
     }
 
+    /**
+     * Relationship dengan TVs
+     */
+    public function tvs()
+    {
+        return $this->hasMany(Tv::class);
+    }
+
     // Scope untuk playlist aktif
     public function scopeActive($query)
     {
