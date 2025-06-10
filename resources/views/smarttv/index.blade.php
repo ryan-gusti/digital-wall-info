@@ -274,8 +274,43 @@ function playPlaylist(playlistId) {
 
 // Auto refresh setiap 5 menit untuk update playlist
 setInterval(function() {
-    window.location.reload();
+    // Update last_seen timestamp before reloading
+    updateLastSeen().then(() => {
+        window.location.reload();
+    }).catch(() => {
+        // Reload anyway even if updateLastSeen fails
+        window.location.reload();
+    });
 }, 300000);
+
+// Function to update TV last seen timestamp
+async function updateLastSeen() {
+    try {
+        const ipAddress = await getExternalIP();
+        const response = await fetch('{{ route("tv.update-last-seen") }}', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': '{{ csrf_token() }}',
+                'Accept': 'application/json'
+            },
+            body: JSON.stringify({
+                ip_address: ipAddress
+            })
+        });
+
+        if (response.ok) {
+            console.log('Last seen timestamp updated successfully');
+            return await response.json();
+        } else {
+            console.log('Failed to update last seen timestamp');
+            throw new Error('Failed to update last seen');
+        }
+    } catch (error) {
+        console.error('Error updating last seen:', error);
+        throw error;
+    }
+}
 
 // Keyboard navigation untuk TV remote
 document.addEventListener('keydown', function(e) {

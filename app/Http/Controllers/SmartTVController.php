@@ -38,6 +38,11 @@ class SmartTVController extends Controller
         // Cek apakah TV dengan IP ini sudah terdaftar
         $tv = Tv::active()->where('ip_address', $clientIp)->with('playlist')->first();
 
+        // Update last_seen timestamp if TV is found
+        if ($tv) {
+            $tv->updateLastSeen();
+        }
+
         // Jika TV ditemukan dan memiliki playlist, return redirect URL
         if ($tv && $tv->playlist && $tv->playlist->is_active) {
             return response()->json([
@@ -77,6 +82,26 @@ class SmartTVController extends Controller
             'status' => 'manual_selection',
             'message' => 'Silakan pilih playlist secara manual'
         ]);
+    }
+
+    /**
+     * Update TV last seen timestamp (called during auto-refresh)
+     */
+    public function updateLastSeen(Request $request)
+    {
+        $request->validate([
+            'ip_address' => 'required|ip'
+        ]);
+
+        $clientIp = $request->input('ip_address');
+        $tv = Tv::where('ip_address', $clientIp)->first();
+
+        if ($tv) {
+            $tv->updateLastSeen();
+            return response()->json(['status' => 'success', 'last_seen' => $tv->last_seen]);
+        }
+
+        return response()->json(['status' => 'not_found'], 404);
     }
 
     /**

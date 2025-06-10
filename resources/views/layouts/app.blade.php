@@ -65,12 +65,35 @@
                             Videos
                         </a>
                     </li>
-                    <li class="nav-item">
-                        <a class="nav-link {{ request()->routeIs('tvs.*') ? 'active' : '' }}"
-                           href="{{ route('tvs.index') }}">
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle {{ request()->routeIs('tvs.*') ? 'active' : '' }}"
+                           href="#" role="button" data-bs-toggle="dropdown">
                             <i class="bi bi-display me-1"></i>
                             TV Management
                         </a>
+                        <ul class="dropdown-menu">
+                            <li>
+                                <a class="dropdown-item {{ request()->routeIs('tvs.index') ? 'active' : '' }}"
+                                   href="{{ route('tvs.index') }}">
+                                    <i class="bi bi-list me-2"></i>
+                                    TV List
+                                </a>
+                            </li>
+                            <li>
+                                <a class="dropdown-item {{ request()->routeIs('tvs.monitoring') ? 'active' : '' }}"
+                                   href="{{ route('tvs.monitoring') }}">
+                                    <i class="bi bi-activity me-2"></i>
+                                    TV Monitoring
+                                </a>
+                            </li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li>
+                                <a class="dropdown-item" href="{{ route('tvs.create') }}">
+                                    <i class="bi bi-plus-circle me-2"></i>
+                                    Add New TV
+                                </a>
+                            </li>
+                        </ul>
                     </li>
                 </ul>
 

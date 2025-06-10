@@ -42,6 +42,9 @@ Route::delete('playlists/{playlist}/videos/{video}', [PlaylistController::class,
 // Resource routes untuk TV Management
 Route::resource('tvs', TvController::class);
 
+// TV Monitoring route
+Route::get('tvs-monitoring', [TvController::class, 'monitoring'])->name('tvs.monitoring');
+
 // Smart TV Interface Routes
 Route::prefix('tv')->name('tv.')->group(function () {
     Route::get('/', [SmartTVController::class, 'index'])->name('index');
@@ -49,6 +52,9 @@ Route::prefix('tv')->name('tv.')->group(function () {
 
     // TV IP checking endpoint
     Route::post('/check-ip', [SmartTVController::class, 'checkTvByIp'])->name('check-ip');
+
+    // TV monitoring endpoint
+    Route::post('/update-last-seen', [SmartTVController::class, 'updateLastSeen'])->name('update-last-seen');
 
     // API endpoints for TV remote control
     Route::get('/api/playlists', [SmartTVController::class, 'getActivePlaylists'])->name('api.playlists');

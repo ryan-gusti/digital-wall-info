@@ -34,7 +34,7 @@
                 </div>
 
                 <!-- Start Button Overlay for User Interaction -->
-                <div class="position-absolute top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center bg-dark bg-opacity-75" 
+                <div class="position-absolute top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center bg-dark bg-opacity-75"
                      id="startOverlay" style="z-index: 1000;">
                     <div class="text-center text-white">
                         <div class="mb-4">
@@ -228,6 +228,47 @@ let autoFullscreenEnabled = true;
 let isAutoFullscreenTriggered = false;
 let userHasInteracted = false;
 
+// Function to get external IP
+async function getExternalIP() {
+    try {
+        const response = await fetch('https://api.ipify.org?format=json');
+        const data = await response.json();
+        return data.ip;
+    } catch (error) {
+        console.error('Failed to get external IP:', error);
+        throw error;
+    }
+}
+
+// Function to update TV last seen timestamp
+async function updateLastSeen() {
+    try {
+        const ipAddress = await getExternalIP();
+        const response = await fetch('{{ route("tv.update-last-seen") }}', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': '{{ csrf_token() }}',
+                'Accept': 'application/json'
+            },
+            body: JSON.stringify({
+                ip_address: ipAddress
+            })
+        });
+
+        if (response.ok) {
+            console.log('Last seen timestamp updated successfully');
+            return await response.json();
+        } else {
+            console.log('Failed to update last seen timestamp');
+            throw new Error('Failed to update last seen');
+        }
+    } catch (error) {
+        console.error('Error updating last seen:', error);
+        throw error;
+    }
+}
+
 document.addEventListener('DOMContentLoaded', function() {
     videoPlayer = document.getElementById('mainVideoPlayer');
 
@@ -240,7 +281,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     initializePlayer();
     setupEventListeners();
-    
+
     // Don't auto-load video until user interaction
     // loadVideo(0);
     startAutoRefresh();
@@ -257,7 +298,7 @@ function initializePlayer() {
 
     // Populate playlist sidebar
     populatePlaylistSidebar();
-    
+
     // Load first video data without playing
     if (currentPlaylist.videos.length > 0) {
         const firstVideo = currentPlaylist.videos[0];
@@ -276,7 +317,7 @@ function setupEventListeners() {
             togglePlayPause();
         }
     });
-    
+
     document.getElementById('prevBtn').addEventListener('click', () => {
         if (!userHasInteracted) {
             startPlayback();
@@ -285,7 +326,7 @@ function setupEventListeners() {
             playPrevious();
         }
     });
-    
+
     document.getElementById('nextBtn').addEventListener('click', () => {
         if (!userHasInteracted) {
             startPlayback();
@@ -294,7 +335,7 @@ function setupEventListeners() {
             playNext();
         }
     });
-    
+
     document.getElementById('fullscreenBtn').addEventListener('click', () => {
         if (!userHasInteracted) {
             startPlayback();
@@ -342,23 +383,23 @@ function loadVideo(index) {
 // Function to handle START button click
 function startPlayback() {
     userHasInteracted = true;
-    
+
     // Hide the start overlay
     const startOverlay = document.getElementById('startOverlay');
     startOverlay.style.opacity = '0';
-    
+
     setTimeout(() => {
         startOverlay.style.display = 'none';
     }, 500);
 
     // Load and start the first video
     loadVideo(0);
-    
+
     // Attempt to enter fullscreen if auto-fullscreen is enabled
     if (autoFullscreenEnabled) {
         triggerAutoFullscreen();
     }
-    
+
     // Start playing the video
     if (isAutoPlay) {
         videoPlayer.play().then(() => {
@@ -547,7 +588,7 @@ function populatePlaylistSidebar() {
                 loadVideo(index);
             }
         });
-        
+
         item.addEventListener('mouseenter', () => item.style.backgroundColor = 'rgba(255,255,255,0.1)');
         item.addEventListener('mouseleave', () => item.style.backgroundColor = 'transparent');
 
@@ -615,16 +656,16 @@ function startAutoRefresh() {
     if (autoRefreshInterval) {
         clearInterval(autoRefreshInterval);
     }
-    
+
     // Store initial playlist state
     lastPlaylistUpdate = Date.now();
-    
+
     autoRefreshInterval = setInterval(() => {
         if (!isRefreshing) {
             checkForPlaylistUpdates();
         }
     }, refreshIntervalMs);
-    
+
     updateAutoRefreshStatus(true);
     console.log('Auto-refresh started with interval:', refreshIntervalMs + 'ms');
 }
@@ -640,9 +681,14 @@ function stopAutoRefresh() {
 
 function checkForPlaylistUpdates() {
     if (isRefreshing) return;
-    
+
     isRefreshing = true;
-    
+
+    // Update last_seen timestamp first
+    updateLastSeen().catch(error => {
+        console.log('Failed to update last seen:', error);
+    });
+
     fetch(`/tv/api/playlist/${currentPlaylist.id}`, {
         method: 'GET',
         headers: {
@@ -658,12 +704,12 @@ function checkForPlaylistUpdates() {
     })
     .then(data => {
         console.log('Received playlist data:', data);
-        
+
         // Validate the response structure
         if (!data || !Array.isArray(data.videos)) {
             throw new Error('Invalid playlist data received');
         }
-        
+
         if (hasPlaylistChanged(data)) {
             updatePlaylistData(data);
             showRefreshNotification('Playlist updated!');
@@ -687,54 +733,54 @@ function hasPlaylistChanged(newPlaylist) {
         console.error('Invalid playlist data for comparison');
         return false;
     }
-    
+
     if (!currentPlaylist || !Array.isArray(currentPlaylist.videos)) {
         console.error('Current playlist data is invalid');
         return false;
     }
-    
+
     // Check if video count changed
     if (newPlaylist.videos.length !== currentPlaylist.videos.length) {
         console.log('Video count changed:', currentPlaylist.videos.length, '->', newPlaylist.videos.length);
         return true;
     }
-    
+
     // Check if video order or content changed
     for (let i = 0; i < newPlaylist.videos.length; i++) {
         const currentVideo = currentPlaylist.videos[i];
         const newVideo = newPlaylist.videos[i];
-        
+
         if (!currentVideo || !newVideo) {
             console.log('Missing video data at index', i);
             return true;
         }
-        
-        if (currentVideo.id !== newVideo.id || 
+
+        if (currentVideo.id !== newVideo.id ||
             currentVideo.title !== newVideo.title ||
             currentVideo.video_url !== newVideo.video_url) {
             console.log('Video content changed at index', i);
             return true;
         }
     }
-    
+
     // Check if playlist settings changed
     if (newPlaylist.auto_play !== currentPlaylist.auto_play ||
         newPlaylist.loop_playlist !== currentPlaylist.loop_playlist) {
         console.log('Playlist settings changed');
         return true;
     }
-    
+
     return false;
 }
 
 function updatePlaylistData(newPlaylist) {
     const currentVideoId = currentPlaylist.videos[currentVideoIndex]?.id;
-    
+
     // Update playlist data
     currentPlaylist = newPlaylist;
     isAutoPlay = newPlaylist.auto_play;
     isLoop = newPlaylist.loop_playlist;
-    
+
     // Try to maintain current video position
     let newVideoIndex = currentVideoIndex; // Keep current index as fallback
     if (currentVideoId) {
@@ -744,25 +790,25 @@ function updatePlaylistData(newPlaylist) {
             currentVideoIndex = newVideoIndex; // Update the current index
         }
     }
-    
+
     // Update UI
     document.getElementById('videoCounter').textContent = `${newVideoIndex + 1} / ${newPlaylist.videos.length}`;
     populatePlaylistSidebar();
     updatePlaylistHighlight();
-    
+
     console.log('Playlist data updated. Videos:', newPlaylist.videos.length);
 }
 
 function manualRefresh() {
     const refreshBtn = document.getElementById('refreshBtn');
     const icon = refreshBtn.querySelector('i');
-    
+
     // Add spinning animation
     icon.classList.add('spinning');
     refreshBtn.disabled = true;
-    
+
     checkForPlaylistUpdates();
-    
+
     // Remove animation after 2 seconds
     setTimeout(() => {
         icon.classList.remove('spinning');
@@ -774,7 +820,7 @@ function updateAutoRefreshStatus(isActive = null) {
     const statusElement = document.getElementById('autoRefreshStatus');
     const isCurrentlyActive = autoRefreshInterval !== null;
     const status = isActive !== null ? isActive : isCurrentlyActive;
-    
+
     if (status) {
         statusElement.innerHTML = '<i class="bi bi-arrow-clockwise me-1"></i>Auto-refresh: ON';
         statusElement.className = 'badge bg-success';
@@ -800,12 +846,12 @@ function showRefreshNotification(message, type = 'success') {
         <i class="bi bi-${type === 'error' ? 'exclamation-triangle' : 'check-circle'} me-2"></i>
         ${message}
     `;
-    
+
     document.body.appendChild(notification);
-    
+
     // Fade in
     setTimeout(() => notification.style.opacity = '1', 100);
-    
+
     // Remove after 3 seconds
     setTimeout(() => {
         notification.style.opacity = '0';
@@ -855,7 +901,7 @@ function toggleAutoFullscreen() {
 
 function updateAutoFullscreenStatus() {
     const statusElement = document.getElementById('autoFullscreenStatus');
-    
+
     if (autoFullscreenEnabled) {
         statusElement.innerHTML = '<i class="bi bi-arrows-fullscreen me-1"></i>Auto-fullscreen: ON';
         statusElement.className = 'badge bg-primary';

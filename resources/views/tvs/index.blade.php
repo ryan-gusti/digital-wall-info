@@ -3,15 +3,20 @@
 @section('title', 'TV Management')
 
 @section('content')
-<div class="d-flex justify-content-between align-items-center mb-4">
-    <h1 class="h2">
+<div class="d-flex justify-content-between align-items-center mb-4">    <h1 class="h2">
         <i class="bi bi-tv me-2"></i>
         TV Management
     </h1>
-    <a href="{{ route('tvs.create') }}" class="btn btn-primary">
-        <i class="bi bi-plus-lg me-1"></i>
-        Tambah TV
-    </a>
+    <div class="d-flex gap-2">
+        <a href="{{ route('tvs.monitoring') }}" class="btn btn-outline-success">
+            <i class="bi bi-activity me-1"></i>
+            TV Monitoring
+        </a>
+        <a href="{{ route('tvs.create') }}" class="btn btn-primary">
+            <i class="bi bi-plus-lg me-1"></i>
+            Tambah TV
+        </a>
+    </div>
 </div>
 
 @if($tvs->count() > 0)
@@ -19,13 +24,13 @@
         <div class="card-body p-0">
             <div class="table-responsive">
                 <table class="table table-hover mb-0">
-                    <thead class="table-light">
-                        <tr>
+                    <thead class="table-light">                        <tr>
                             <th>Nama TV</th>
                             <th>IP Address</th>
                             <th>Lokasi</th>
                             <th>Playlist</th>
                             <th>Status</th>
+                            <th>Last Seen</th>
                             <th style="width: 150px;">Aksi</th>
                         </tr>
                     </thead>
@@ -51,35 +56,54 @@
                                         <small class="text-muted">{{ $tv->playlist->videos->count() }} video(s)</small>
                                     @else
                                         <span class="badge bg-secondary">Tidak ada playlist</span>
+                                    @endif                                </td>
+                                <td>
+                                    <div class="d-flex flex-column gap-1">
+                                        <span class="badge bg-{{ $tv->is_active ? 'success' : 'secondary' }}">
+                                            {{ $tv->is_active ? 'Aktif' : 'Tidak Aktif' }}
+                                        </span>
+                                        @if($tv->is_active)
+                                            <span class="badge bg-{{ $tv->isOnline() ? 'success' : 'danger' }}">
+                                                <i class="bi bi-{{ $tv->isOnline() ? 'wifi' : 'wifi-off' }} me-1"></i>
+                                                {{ $tv->isOnline() ? 'Online' : 'Offline' }}
+                                            </span>
+                                        @endif
+                                    </div>
+                                </td>
+                                <td>
+                                    @if($tv->last_seen)
+                                        <div class="small">
+                                            <div class="text-muted">{{ $tv->getLastSeenFormatted() }}</div>
+                                            <div class="text-muted" style="font-size: 0.75rem;">
+                                                {{ $tv->last_seen->format('M j, Y H:i') }}
+                                            </div>
+                                        </div>
+                                    @else
+                                        <span class="text-muted small">Never connected</span>
                                     @endif
                                 </td>
                                 <td>
-                                    <span class="badge bg-{{ $tv->is_active ? 'success' : 'secondary' }}">
-                                        {{ $tv->is_active ? 'Aktif' : 'Tidak Aktif' }}
-                                    </span>
-                                </td>
-                                <td>
                                     <div class="btn-group btn-group-sm">
-                                        <a href="{{ route('tvs.show', $tv) }}" 
-                                           class="btn btn-outline-info" 
+                                        <a href="{{ route('tvs.show', $tv) }}"
+                                           class="btn btn-outline-info"
                                            title="Detail TV">
                                             <i class="bi bi-eye"></i>
                                         </a>
-                                        <a href="{{ route('tvs.edit', $tv) }}" 
-                                           class="btn btn-outline-warning" 
+                                        <a href="{{ route('tvs.edit', $tv) }}"
+                                           class="btn btn-outline-warning"
                                            title="Edit TV">
                                             <i class="bi bi-pencil"></i>
                                         </a>
                                         @if($tv->playlist)
-                                            <a href="{{ route('tv.play', $tv->playlist) }}" 
+                                            <a href="{{ route('tv.play', $tv->playlist) }}"
                                                target="_blank"
-                                               class="btn btn-outline-success" 
+                                               class="btn btn-outline-success"
                                                title="Preview Playlist">
                                                 <i class="bi bi-play-circle"></i>
                                             </a>
                                         @endif
-                                        <button type="button" 
-                                                class="btn btn-outline-danger" 
+                                        <button type="button"
+                                                class="btn btn-outline-danger"
                                                 title="Hapus TV"
                                                 onclick="deleteTV({{ $tv->id }})">
                                             <i class="bi bi-trash"></i>

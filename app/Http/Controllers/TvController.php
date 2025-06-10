@@ -90,4 +90,21 @@ class TvController extends Controller
         $tv->delete();
         return redirect()->route('tvs.index')->with('success', 'TV berhasil dihapus!');
     }
+
+    /**
+     * Display TV monitoring dashboard
+     */
+    public function monitoring()
+    {
+        $tvs = Tv::with('playlist')->orderBy('name')->get();
+
+        $stats = [
+            'total' => $tvs->count(),
+            'active' => $tvs->where('is_active', true)->count(),
+            'online' => $tvs->filter(function($tv) { return $tv->isOnline(); })->count(),
+            'offline' => $tvs->filter(function($tv) { return !$tv->isOnline() && $tv->is_active; })->count(),
+        ];
+
+        return view('tvs.monitoring', compact('tvs', 'stats'));
+    }
 }
